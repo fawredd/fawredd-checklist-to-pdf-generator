@@ -1,0 +1,120 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { ChecklistForm } from "@/components/checklist-form"
+import { ChecklistPreview } from "@/components/checklist-preview"
+import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import type { Checklist } from "@/lib/types"
+import { loadChecklists, saveChecklist } from "@/lib/storage"
+import { ChecklistSelector } from "@/components/checklist-selector"
+import { Plus, Printer, Download } from "lucide-react"
+import { useInstall } from "@/components/header"
+
+export function ChecklistApp() {
+  const [checklists, setChecklists] = useState<Checklist[]>([])
+  const [currentChecklist, setCurrentChecklist] = useState<Checklist | null>(null)
+  const [activeTab, setActiveTab] = useState("edit")
+  const [formState, setFormState] = useState<Checklist | null>(null)
+
+  const { canInstall, isPWA, handleInstall } = useInstall()
+
+  useEffect(() => {
+    const savedChecklists = loadChecklists()
+    setChecklists(savedChecklists)
+
+    if (savedChecklists.length > 0) {
+      setCurrentChecklist(savedChecklists[0])
+      setFormState(savedChecklists[0])
+    } else {
+      createNewChecklist()
+    }
+  }, [])
+
+  const createNewChecklist = () => {
+    const newChecklist: Checklist = {
+      id: Date.now().toString(),
+      title: "New Checklist",
+      description: "",
+      items: [{ id: "1", text: "New item", checked: false }],
+    }
+
+    setCurrentChecklist(newChecklist)
+    setFormState(newChecklist)
+    setActiveTab("edit")
+  }
+
+  const handleSave = (checklist: Checklist) => {
+    const updatedChecklists = saveChecklist(checklist, checklists)
+    setChecklists(updatedChecklists)
+    setCurrentChecklist(checklist)
+    setFormState(checklist)
+  }
+
+  const handleSelectChecklist = (id: string) => {
+    const selected = checklists.find((c) => c.id === id) || null
+    setCurrentChecklist(selected)
+    setFormState(selected)
+    setActiveTab("edit")
+  }
+
+  const handlePrint = () => {
+    setActiveTab("preview")
+    setTimeout(() => {
+      window.print()
+    }, 100)
+  }
+
+  const handleFormChange = (updatedChecklist: Checklist) => {
+    setFormState(updatedChecklist)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-center">
+        <div className="space-y-2">
+          <label htmlFor="checklist-selector" className="text-sm font-medium">
+            Saved checklists
+          </label>
+          <ChecklistSelector
+            id="checklist-selector"
+            checklists={checklists}
+            currentId={currentChecklist?.id}
+            onSelect={handleSelectChecklist}
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={createNewChecklist} variant="outline" size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            New
+          </Button>
+          {canInstall && !isPWA && (
+            <Button onClick={handleInstall} variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Install
+            </Button>
+          )}
+          <Button onClick={handlePrint} variant="default" size="sm">
+            <Printer className="h-4 w-4 mr-2" />
+            Print
+          </Button>
+        </div>
+      </div>
+
+      {currentChecklist && (
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 tabs-content">
+          <TabsList className="tabs-list">
+            <TabsTrigger value="edit">Edit</TabsTrigger>
+            <TabsTrigger value="preview">Preview</TabsTrigger>
+          </TabsList>
+          <TabsContent value="edit" className="space-y-4">
+            <ChecklistForm checklist={formState || currentChecklist} onSave={handleSave} onChange={handleFormChange} />
+          </TabsContent>
+          <TabsContent value="preview">
+            <ChecklistPreview checklist={formState || currentChecklist} />
+          </TabsContent>
+        </Tabs>
+      )}
+    </div>
+  )
+}
