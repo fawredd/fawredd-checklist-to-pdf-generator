@@ -10,7 +10,7 @@ import { loadChecklists, saveChecklist } from "@/lib/storage"
 import { ChecklistSelector } from "@/components/checklist-selector"
 import { Plus, Printer, Download, Share2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { InstallPrompt } from "@/components/install-prompt"
+import { InstallButton } from "./install-button"
 
 export function ChecklistApp() {
   const [checklists, setChecklists] = useState<Checklist[]>([])
@@ -238,13 +238,8 @@ export function ChecklistApp() {
           </Button>
 
           {/* Only show install button if not in standalone mode */}
-          {!isStandalone && (
-            <Button onClick={handleInstall} variant="outline" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Install
-            </Button>
-          )}
-
+          <InstallButton />
+          
           <Button onClick={handlePrint} variant="default" size="sm">
             <Printer className="h-4 w-4 mr-2" />
             Print
@@ -257,8 +252,6 @@ export function ChecklistApp() {
           )}
         </div>
       </div>
-
-      {showInstallPrompt && <InstallPrompt onClose={() => setShowInstallPrompt(false)} />}
 
       {currentChecklist && (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 tabs-content">

@@ -20,14 +20,5 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ],
-  "shortcuts": [
-    {
-      "name": "New Checklist",
-      "short_name": "New",
-      "description": "Create a new checklist",
-      "url": "/?new=true",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
-    }
   ]
 }
