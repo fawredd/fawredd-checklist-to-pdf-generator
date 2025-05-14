@@ -17,11 +17,41 @@ export function ChecklistApp() {
   const [activeTab, setActiveTab] = useState("edit")
   const [formState, setFormState] = useState<Checklist | null>(null)
   const [canInstall, setCanInstall] = useState(false)
-  const [isPWA, setIsPWA] = useState(false)
-  const deferredPromptRef = useRef<any>(null)
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
 
+  // Installation detection
+  useEffect(() => {
+    console.log("Setting up installation detection")
+
+    const handleBeforeInstallPrompt = (e: Event) => {
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault()
+      // Store the event for later use
+      console.log("Install prompt detected!")
+      setDeferredPrompt(e)
+      setCanInstall(true)
+    }
+
+    // Add the event listener
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+
+    // Check if already running as PWA
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      console.log("Running as standalone PWA")
+      setCanInstall(false)
+    } else {
+      console.log("Not running as PWA")
+    }
+
+    // Cleanup
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+    }
+  }, [])
+
+  // Load checklists
   useEffect(() => {
     const savedChecklists = loadChecklists()
     setChecklists(savedChecklists)
@@ -31,22 +61,6 @@ export function ChecklistApp() {
       setFormState(savedChecklists[0])
     } else {
       createNewChecklist()
-    }
-
-    // Check if running as PWA
-    if (window.matchMedia("(display-mode: standalone)").matches) {
-      setIsPWA(true)
-    }
-
-    // Listen for beforeinstallprompt event
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault()
-      deferredPromptRef.current = e
-      setCanInstall(true)
-    })
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", () => {})
     }
   }, [])
 
@@ -90,15 +104,48 @@ export function ChecklistApp() {
   }
 
   const handleInstall = async () => {
-    if (!deferredPromptRef.current) return
+    console.log("Install button clicked", deferredPrompt)
 
-    deferredPromptRef.current.prompt()
-    const { outcome } = await deferredPromptRef.current.userChoice
-
-    if (outcome === "accepted") {
-      setCanInstall(false)
+    if (!deferredPrompt) {
+      console.log("No deferred prompt available")
+      toast({
+        title: "Installation",
+        description: "Installation prompt not available. Try using your browser's install option.",
+      })
+      return
     }
-    deferredPromptRef.current = null
+
+    try {
+      // Show the install prompt
+      deferredPrompt.prompt()
+
+      // Wait for the user to respond to the prompt
+      const { outcome } = await deferredPrompt.userChoice
+      console.log(`User response to the install prompt: ${outcome}`)
+
+      // Clear the saved prompt since it can't be used again
+      setDeferredPrompt(null)
+
+      if (outcome === "accepted") {
+        setCanInstall(false)
+        toast({
+          title: "Installation started",
+          description: "The app is being installed on your device.",
+        })
+      } else {
+        toast({
+          title: "Installation cancelled",
+          description: "You can install the app later from the menu.",
+        })
+      }
+    } catch (error) {
+      console.error("Error during installation:", error)
+      toast({
+        title: "Installation error",
+        description: "There was a problem installing the app.",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleShare = async () => {
@@ -169,12 +216,13 @@ export function ChecklistApp() {
             <Plus className="h-4 w-4 mr-2" />
             New
           </Button>
-          {canInstall && !isPWA && (
-            <Button onClick={handleInstall} variant="outline" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Install
-            </Button>
-          )}
+
+          {/* Always show the install button for debugging */}
+          <Button onClick={handleInstall} variant="outline" size="sm">
+            <Download className="h-4 w-4 mr-2" />
+            Install
+          </Button>
+
           <Button onClick={handlePrint} variant="default" size="sm">
             <Printer className="h-4 w-4 mr-2" />
             Print
