@@ -18,8 +18,77 @@ export function ChecklistApp() {
   const [activeTab, setActiveTab] = useState("edit")
   const [formState, setFormState] = useState<Checklist | null>(null)
   const [showInstallPrompt, setShowInstallPrompt] = useState(false)
+  const [isStandalone, setIsStandalone] = useState(false)
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
+
+  // Check if running as PWA
+  useEffect(() => {
+    const checkIfPWA = () => {
+      const isStandalone =
+        window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone === true
+
+      setIsStandalone(isStandalone)
+      console.log("Is running as PWA:", isStandalone)
+    }
+
+    checkIfPWA()
+
+    // Listen for display mode changes
+    const mediaQuery = window.matchMedia("(display-mode: standalone)")
+    const handleChange = (e: MediaQueryListEvent) => {
+      setIsStandalone(e.matches)
+      console.log("Display mode changed to:", e.matches ? "standalone" : "browser")
+    }
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener("change", handleChange)
+    } else {
+      // Fallback for older browsers
+      mediaQuery.addListener(handleChange)
+    }
+
+    // Cleanup
+    return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener("change", handleChange)
+      } else {
+        // Fallback for older browsers
+        mediaQuery.removeListener(handleChange)
+      }
+    }
+  }, [])
+
+  // Capture install prompt
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault()
+      // Store the event for later use
+      console.log("Install prompt detected!")
+      setDeferredPrompt(e)
+    }
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+    }
+  }, [])
+
+  // Listen for new checklist event (from shortcuts)
+  useEffect(() => {
+    const handleNewChecklist = () => {
+      createNewChecklist()
+    }
+
+    window.addEventListener("create-new-checklist", handleNewChecklist)
+
+    return () => {
+      window.removeEventListener("create-new-checklist", handleNewChecklist)
+    }
+  }, [])
 
   // Load checklists
   useEffect(() => {
@@ -73,8 +142,30 @@ export function ChecklistApp() {
     }, 100)
   }
 
-  const handleInstall = () => {
-    setShowInstallPrompt(true)
+  const handleInstall = async () => {
+    // If we have a deferred prompt, use it
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt()
+        const { outcome } = await deferredPrompt.userChoice
+        console.log(`User response to the install prompt: ${outcome}`)
+
+        if (outcome === "accepted") {
+          toast({
+            title: "Installation started",
+            description: "The app is being installed on your device.",
+          })
+        }
+
+        // Clear the deferred prompt
+        setDeferredPrompt(null)
+      } catch (error) {
+        console.error("Error during installation:", error)
+      }
+    } else {
+      // Otherwise show our custom install instructions
+      setShowInstallPrompt(true)
+    }
   }
 
   const handleShare = async () => {
@@ -146,11 +237,13 @@ export function ChecklistApp() {
             New
           </Button>
 
-          {/* Always show install button */}
-          <Button onClick={handleInstall} variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Install
-          </Button>
+          {/* Only show install button if not in standalone mode */}
+          {!isStandalone && (
+            <Button onClick={handleInstall} variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Install
+            </Button>
+          )}
 
           <Button onClick={handlePrint} variant="default" size="sm">
             <Printer className="h-4 w-4 mr-2" />
