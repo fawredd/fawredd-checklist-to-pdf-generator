@@ -17,39 +17,89 @@ export function ChecklistApp() {
   const [activeTab, setActiveTab] = useState("edit")
   const [formState, setFormState] = useState<Checklist | null>(null)
   const [canInstall, setCanInstall] = useState(false)
+  const [isInstalled, setIsInstalled] = useState(false)
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
 
+  // Check if running as PWA
+  useEffect(() => {
+    const checkIfPWA = () => {
+      const isStandalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        (window.navigator as any).standalone ||
+        document.referrer.includes("android-app://")
+
+      setIsInstalled(isStandalone)
+      console.log("Is running as PWA:", isStandalone)
+    }
+
+    // Check initially
+    checkIfPWA()
+
+    // Check when the page becomes visible again (user might have installed in the meantime)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        checkIfPWA()
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [])
+
   // Installation detection
   useEffect(() => {
-    console.log("Setting up installation detection")
+    let promptEvent: any = null
 
     const handleBeforeInstallPrompt = (e: Event) => {
       // Prevent the mini-infobar from appearing on mobile
       e.preventDefault()
+
       // Store the event for later use
-      console.log("Install prompt detected!")
+      promptEvent = e
       setDeferredPrompt(e)
       setCanInstall(true)
+
+      console.log("Install prompt detected and saved!")
     }
 
     // Add the event listener
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
 
-    // Check if already running as PWA
-    if (window.matchMedia("(display-mode: standalone)").matches) {
-      console.log("Running as standalone PWA")
-      setCanInstall(false)
-    } else {
-      console.log("Not running as PWA")
+    // Check if the event was already fired before we added the listener
+    if ((window as any).deferredPrompt) {
+      promptEvent = (window as any).deferredPrompt
+      setDeferredPrompt(promptEvent)
+      setCanInstall(true)
+      console.log("Found existing deferred prompt")
+      ;(window as any).deferredPrompt = null
     }
+
+    // Handle the appinstalled event
+    const handleAppInstalled = () => {
+      console.log("App was installed")
+      setIsInstalled(true)
+      setCanInstall(false)
+      setDeferredPrompt(null)
+
+      toast({
+        title: "App installed",
+        description: "The checklist app has been successfully installed on your device.",
+      })
+    }
+
+    window.addEventListener("appinstalled", handleAppInstalled)
 
     // Cleanup
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+      window.removeEventListener("appinstalled", handleAppInstalled)
     }
-  }, [])
+  }, [toast])
 
   // Load checklists
   useEffect(() => {
@@ -104,14 +154,25 @@ export function ChecklistApp() {
   }
 
   const handleInstall = async () => {
-    console.log("Install button clicked", deferredPrompt)
+    console.log("Install button clicked", { deferredPrompt, canInstall })
 
     if (!deferredPrompt) {
       console.log("No deferred prompt available")
-      toast({
-        title: "Installation",
-        description: "Installation prompt not available. Try using your browser's install option.",
-      })
+
+      // Check if it's iOS
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream
+
+      if (isIOS) {
+        toast({
+          title: "iOS Installation",
+          description: "To install, tap the share icon and then 'Add to Home Screen'.",
+        })
+      } else {
+        toast({
+          title: "Installation",
+          description: "Installation prompt not available. Try using your browser's menu to install.",
+        })
+      }
       return
     }
 
@@ -125,9 +186,9 @@ export function ChecklistApp() {
 
       // Clear the saved prompt since it can't be used again
       setDeferredPrompt(null)
+      setCanInstall(false)
 
       if (outcome === "accepted") {
-        setCanInstall(false)
         toast({
           title: "Installation started",
           description: "The app is being installed on your device.",
@@ -217,11 +278,13 @@ export function ChecklistApp() {
             New
           </Button>
 
-          {/* Always show the install button for debugging */}
-          <Button onClick={handleInstall} variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Install
-          </Button>
+          {/* Only show install button if not already installed and can be installed */}
+          {canInstall && !isInstalled && (
+            <Button onClick={handleInstall} variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Install
+            </Button>
+          )}
 
           <Button onClick={handlePrint} variant="default" size="sm">
             <Printer className="h-4 w-4 mr-2" />

@@ -12,6 +12,16 @@ export const metadata: Metadata = {
   title: "Checklist Creator",
   description: "Create and print checklists easily",
   manifest: "/manifest.json",
+  themeColor: "#000000",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Checklist Creator",
+  },
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/icon-192.png",
+  },
     generator: 'v0.dev'
 }
 
