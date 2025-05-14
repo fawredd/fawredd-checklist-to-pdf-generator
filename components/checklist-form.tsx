@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -21,12 +21,24 @@ export function ChecklistForm({ checklist, onSave, onChange }: ChecklistFormProp
   const [title, setTitle] = useState(checklist.title)
   const [description, setDescription] = useState(checklist.description)
   const [items, setItems] = useState<ChecklistItem[]>(checklist.items)
+  const [lastAddedId, setLastAddedId] = useState<string | null>(null)
+
+  // Ref to track the input that should be focused
+  const inputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({})
 
   useEffect(() => {
     setTitle(checklist.title)
     setDescription(checklist.description)
     setItems(checklist.items)
   }, [checklist])
+
+  // Focus the last added item
+  useEffect(() => {
+    if (lastAddedId && inputRefs.current[lastAddedId]) {
+      inputRefs.current[lastAddedId]?.focus()
+      setLastAddedId(null)
+    }
+  }, [lastAddedId, items])
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTitle = sanitizeInput(e.target.value)
@@ -67,6 +79,7 @@ export function ChecklistForm({ checklist, onSave, onChange }: ChecklistFormProp
       ...checklist,
       items: newItems,
     })
+    setLastAddedId(newItem.id)
   }
 
   const removeItem = (id: string) => {
@@ -77,6 +90,13 @@ export function ChecklistForm({ checklist, onSave, onChange }: ChecklistFormProp
         ...checklist,
         items: newItems,
       })
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, id: string) => {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      addItem()
     }
   }
 
@@ -131,9 +151,11 @@ export function ChecklistForm({ checklist, onSave, onChange }: ChecklistFormProp
                             <Grip className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                           </div>
                           <Input
+                            ref={(el) => (inputRefs.current[item.id] = el)}
                             value={item.text}
                             onChange={(e) => handleItemChange(item.id, e.target.value)}
-                            placeholder="Item text"
+                            onKeyDown={(e) => handleKeyDown(e, item.id)}
+                            placeholder={item.text ? "" : "Item text"}
                             className="flex-1"
                           />
                           <Button
