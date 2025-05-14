@@ -10,96 +10,16 @@ import { loadChecklists, saveChecklist } from "@/lib/storage"
 import { ChecklistSelector } from "@/components/checklist-selector"
 import { Plus, Printer, Download, Share2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { InstallPrompt } from "@/components/install-prompt"
 
 export function ChecklistApp() {
   const [checklists, setChecklists] = useState<Checklist[]>([])
   const [currentChecklist, setCurrentChecklist] = useState<Checklist | null>(null)
   const [activeTab, setActiveTab] = useState("edit")
   const [formState, setFormState] = useState<Checklist | null>(null)
-  const [canInstall, setCanInstall] = useState(false)
-  const [isInstalled, setIsInstalled] = useState(false)
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false)
   const previewRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
-
-  // Check if running as PWA
-  useEffect(() => {
-    const checkIfPWA = () => {
-      const isStandalone =
-        window.matchMedia("(display-mode: standalone)").matches ||
-        (window.navigator as any).standalone ||
-        document.referrer.includes("android-app://")
-
-      setIsInstalled(isStandalone)
-      console.log("Is running as PWA:", isStandalone)
-    }
-
-    // Check initially
-    checkIfPWA()
-
-    // Check when the page becomes visible again (user might have installed in the meantime)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        checkIfPWA()
-      }
-    }
-
-    document.addEventListener("visibilitychange", handleVisibilityChange)
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange)
-    }
-  }, [])
-
-  // Installation detection
-  useEffect(() => {
-    let promptEvent: any = null
-
-    const handleBeforeInstallPrompt = (e: Event) => {
-      // Prevent the mini-infobar from appearing on mobile
-      e.preventDefault()
-
-      // Store the event for later use
-      promptEvent = e
-      setDeferredPrompt(e)
-      setCanInstall(true)
-
-      console.log("Install prompt detected and saved!")
-    }
-
-    // Add the event listener
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
-
-    // Check if the event was already fired before we added the listener
-    if ((window as any).deferredPrompt) {
-      promptEvent = (window as any).deferredPrompt
-      setDeferredPrompt(promptEvent)
-      setCanInstall(true)
-      console.log("Found existing deferred prompt")
-      ;(window as any).deferredPrompt = null
-    }
-
-    // Handle the appinstalled event
-    const handleAppInstalled = () => {
-      console.log("App was installed")
-      setIsInstalled(true)
-      setCanInstall(false)
-      setDeferredPrompt(null)
-
-      toast({
-        title: "App installed",
-        description: "The checklist app has been successfully installed on your device.",
-      })
-    }
-
-    window.addEventListener("appinstalled", handleAppInstalled)
-
-    // Cleanup
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
-      window.removeEventListener("appinstalled", handleAppInstalled)
-    }
-  }, [toast])
 
   // Load checklists
   useEffect(() => {
@@ -153,60 +73,8 @@ export function ChecklistApp() {
     }, 100)
   }
 
-  const handleInstall = async () => {
-    console.log("Install button clicked", { deferredPrompt, canInstall })
-
-    if (!deferredPrompt) {
-      console.log("No deferred prompt available")
-
-      // Check if it's iOS
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream
-
-      if (isIOS) {
-        toast({
-          title: "iOS Installation",
-          description: "To install, tap the share icon and then 'Add to Home Screen'.",
-        })
-      } else {
-        toast({
-          title: "Installation",
-          description: "Installation prompt not available. Try using your browser's menu to install.",
-        })
-      }
-      return
-    }
-
-    try {
-      // Show the install prompt
-      deferredPrompt.prompt()
-
-      // Wait for the user to respond to the prompt
-      const { outcome } = await deferredPrompt.userChoice
-      console.log(`User response to the install prompt: ${outcome}`)
-
-      // Clear the saved prompt since it can't be used again
-      setDeferredPrompt(null)
-      setCanInstall(false)
-
-      if (outcome === "accepted") {
-        toast({
-          title: "Installation started",
-          description: "The app is being installed on your device.",
-        })
-      } else {
-        toast({
-          title: "Installation cancelled",
-          description: "You can install the app later from the menu.",
-        })
-      }
-    } catch (error) {
-      console.error("Error during installation:", error)
-      toast({
-        title: "Installation error",
-        description: "There was a problem installing the app.",
-        variant: "destructive",
-      })
-    }
+  const handleInstall = () => {
+    setShowInstallPrompt(true)
   }
 
   const handleShare = async () => {
@@ -278,13 +146,11 @@ export function ChecklistApp() {
             New
           </Button>
 
-          {/* Only show install button if not already installed and can be installed */}
-          {canInstall && !isInstalled && (
-            <Button onClick={handleInstall} variant="outline" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Install
-            </Button>
-          )}
+          {/* Always show install button */}
+          <Button onClick={handleInstall} variant="outline" size="sm">
+            <Download className="h-4 w-4 mr-2" />
+            Install
+          </Button>
 
           <Button onClick={handlePrint} variant="default" size="sm">
             <Printer className="h-4 w-4 mr-2" />
@@ -298,6 +164,8 @@ export function ChecklistApp() {
           )}
         </div>
       </div>
+
+      {showInstallPrompt && <InstallPrompt onClose={() => setShowInstallPrompt(false)} />}
 
       {currentChecklist && (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 tabs-content">
